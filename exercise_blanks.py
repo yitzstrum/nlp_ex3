@@ -357,8 +357,17 @@ def get_predictions_for_data(model, data_iter):
     :param data_iter: torch iterator as given by the DataManager
     :return:
     """
-    return
+    cor_count = 0
+    batch_size = data_iter.batch_size
+    iter_to_epoch = int(len(data_iter.dataset) // batch_size )
 
+    for j in range(iter_to_epoch):
+        for i,(X,y) in enumerate(data_iter[j*batch_size:(j+1)*batch_size]):
+            lbls = y.reshape(data_iter.batch_size,1).astype(torch.FloatTensor)
+            pred = model.predict(X.astype(torch.FloatTensor))
+            cor_count += int(binary_accuracy(pred,lbls)*len(lbls))
+
+    return 100 * cor_count / int(len(data_iter.dataset))
 
 def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
     """
