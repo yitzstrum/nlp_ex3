@@ -307,8 +307,11 @@ def binary_accuracy(preds, y):
     :param y: a vector of true labels
     :return: scalar value - (<number of accurate predictions> / <number of examples>)
     """
-
-    return
+    accurate_predictions = 0
+    for i in range(len(preds)):
+        if preds[i] == y[i]:
+            accurate_predictions += 1
+    return accurate_predictions / len(preds)
 
 
 def train_epoch(model, data_iterator, optimizer, criterion):
