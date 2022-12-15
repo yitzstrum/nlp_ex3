@@ -325,8 +325,24 @@ def train_epoch(model, data_iterator, optimizer, criterion):
     :param optimizer: the optimizer object for the training process.
     :param criterion: the criterion object for the training process.
     """
+    total_loss = 0
+    total_accuracy = 0
+    my_device = get_available_device()
+    for x, y in data_iterator:
+        local_x = x.to(my_device)
+        local_y = y.to(my_device)
+        optimizer.zero_grad()
+        pred = model(local_x.type(torch.FloatTensor)).transpose(0, 1).squeeze(0)
+        curr_loss = criterion(pred, local_y)
+        total_loss += curr_loss
+        curr_loss.backward()
+        optimizer.step()
+        total_accuracy += binary_accuracy(torch.round(nn.Sigmoid()(pred)), y)
 
-    return
+    data_set_size = len(data_iterator)
+    accuracy = total_accuracy / data_set_size
+    loss = total_loss / data_set_size
+    return accuracy, loss
 
 
 def evaluate(model, data_iterator, criterion):
@@ -337,7 +353,23 @@ def evaluate(model, data_iterator, criterion):
     :param criterion: the loss criterion used for evaluation
     :return: tuple of (average loss over all examples, average accuracy over all examples)
     """
-    return
+    total_loss = 0
+    total_accuracy = 0
+    my_device = get_available_device()
+    for x, y in data_iterator:
+        local_x = x.to(my_device)
+        local_y = y.to(my_device)
+        pred = model(local_x.type(torch.FloatTensor)).transpose(0, 1).squeeze(
+            0)
+        curr_loss = criterion(pred, local_y)
+        total_loss += curr_loss
+        curr_loss.backward()
+        total_accuracy += binary_accuracy(torch.round(nn.Sigmoid()(pred)), y)
+    data_set_size = len(data_iterator)
+    accuracy = total_accuracy / data_set_size
+    loss = total_loss / data_set_size
+
+    return accuracy, loss
 
 
 def get_predictions_for_data(model, data_iter):
