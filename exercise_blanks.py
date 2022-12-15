@@ -138,9 +138,9 @@ def average_one_hots(sent, word_to_ind):
     :param word_to_ind: a mapping between words to indices
     :return:
     """
-    vec = np.zeros((len(word_to_ind,)))
-    for w in sent: vec[word_to_ind[w]]+=1
-    return vec
+    vec = np.zeros(len(sent),)
+    for i,w in enumerate(sent): vec[word_to_ind[w]]+=1
+    return vec/len(sent)
 
 
 def get_word_to_ind(words_list):
@@ -150,7 +150,9 @@ def get_word_to_ind(words_list):
     :param words_list: a list of words
     :return: the dictionary mapping words to the index
     """
-    return
+    maps = {}
+    for i,w in enumerate(words_list) : maps[w] = i
+    return maps
 
 
 def sentence_to_embedding(sent, word_to_vec, seq_len, embedding_dim=300):
@@ -291,14 +293,17 @@ class LogLinear(nn.Module):
     general class for the log-linear models for sentiment analysis.
     """
     def __init__(self, embedding_dim):
-        return
+        super().__init__()
+        self.linear = torch.nn.Linear(embedding_dim,1)
+        self.sigm = torch.nn.Sigmoid()
+
 
     def forward(self, x):
-        return
+        h1 = self.linear(x)
 
     def predict(self, x):
-        return
-
+        out = self.linear(x)
+        return self.sigm(out)
 
 # ------------------------- training functions -------------
 
@@ -384,8 +389,17 @@ def get_predictions_for_data(model, data_iter):
     :param data_iter: torch iterator as given by the DataManager
     :return:
     """
-    return
+    cor_count = 0
+    batch_size = data_iter.batch_size
+    iter_to_epoch = int(len(data_iter.dataset) // batch_size )
 
+    for j in range(iter_to_epoch):
+        for i,(X,y) in enumerate(data_iter[j*batch_size:(j+1)*batch_size]):
+            lbls = y.reshape(data_iter.batch_size,1).astype(torch.FloatTensor)
+            pred = model.predict(X.astype(torch.FloatTensor))
+            cor_count += int(binary_accuracy(pred,lbls)*len(lbls))
+
+    return 100 * cor_count / int(len(data_iter.dataset))
 
 def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
     """
