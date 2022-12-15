@@ -125,7 +125,9 @@ def get_one_hot(size, ind):
     :param ind: the entry index to turn to 1
     :return: numpy ndarray which represents the one-hot vector
     """
-    return
+    vec = np.zeros((size,))
+    vec[ind] = 1
+    return vec
 
 
 def average_one_hots(sent, word_to_ind):
