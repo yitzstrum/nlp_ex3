@@ -138,7 +138,9 @@ def average_one_hots(sent, word_to_ind):
     :param word_to_ind: a mapping between words to indices
     :return:
     """
-    return
+    vec = np.zeros((len(word_to_ind,)))
+    for w in sent: vec[word_to_ind[w]]+=1
+    return vec
 
 
 def get_word_to_ind(words_list):
