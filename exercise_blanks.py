@@ -299,7 +299,7 @@ class LogLinear(nn.Module):
 
 
     def forward(self, x):
-        h1 = self.linear(x)
+        return self.linear(x)
 
     def predict(self, x):
         out = self.linear(x)
