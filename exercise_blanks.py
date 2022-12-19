@@ -165,7 +165,13 @@ def sentence_to_embedding(sent, word_to_vec, seq_len, embedding_dim=300):
     :param embedding_dim: the dimension of the w2v embedding
     :return: numpy ndarray of shape (seq_len, embedding_dim) with the representation of the sentence
     """
-    return
+    vecs = []
+    for i in range(len(sent.text)):
+        if i == seq_len: break
+        word = sent.text[i]
+        if word in word_to_vec: vecs.append(word_to_vec.get(word,np.zeros(embedding_dim)))
+    for j in range(len(vecs)-seq_len):vecs.append(np.zeros(embedding_dim))
+    return np.array(vecs)
 
 
 class OnlineDataset(Dataset):
@@ -279,13 +285,20 @@ class LSTM(nn.Module):
     An LSTM for sentiment analysis with architecture as described in the exercise description.
     """
     def __init__(self, embedding_dim, hidden_dim, n_layers, dropout):
-        return
+        super(LSTM, self).__init__()
+        self.lstm = torch.nn.LSTM(embedding_dim,hidden_dim,n_layers,
+                                  bidirectional=True,batch_first=True,
+                                  dropout=dropout)
 
+        self.linear = torch.nn.Linear(hidden_dim*2,1)
+        self.sig = torch.nn.Sigmoid()
     def forward(self, text):
-        return
+        out_lstm,zz = self.lstm(text)
+        o = out_lstm[:,-1,:]
+        return self.linear(o)
 
     def predict(self, text):
-        return
+        return self.sig(self.forward(text))
 
 
 class LogLinear(nn.Module):
