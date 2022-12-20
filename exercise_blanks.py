@@ -9,6 +9,8 @@ import operator
 import data_loader
 import pickle
 import tqdm
+import matplotlib.pyplot as plt
+
 
 # ------------------------------------------- Constants ----------------------------------------
 
@@ -23,6 +25,10 @@ TRAIN = "train"
 VAL = "val"
 TEST = "test"
 
+BATCH_SIZE = 64
+N_EPOCHS = 20
+LEARNING_RATE = 0.01
+WEIGHT_DECAY = 0.0001
 
 # ------------------------------------------ Helper methods and classes --------------------------
 
@@ -116,8 +122,10 @@ def get_w2v_average(sent, word_to_vec, embedding_dim):
     :return The average embedding vector as numpy ndarray.
     """
     embds = np.zeros(embedding_dim)
-    for word in sent.text: embds += word_to_vec.get(word,np.zeros_like(embds))
-    return embds/len(sent.text)
+    for word in sent.text:
+        embds += word_to_vec.get(word, np.zeros_like(embds))
+    return embds / len(sent.text)
+
 
 def get_one_hot(size, ind):
     """
@@ -139,9 +147,11 @@ def average_one_hots(sent, word_to_ind):
     :param word_to_ind: a mapping between words to indices
     :return:
     """
-    vec = np.zeros(len(sent),)
-    for i,w in enumerate(sent): vec[word_to_ind[w]]+=1
-    return vec/len(sent)
+    size = len(word_to_ind)
+    vec = np.zeros(size, )
+    for word in sent.text:
+        vec += get_one_hot(size, word_to_ind[word])
+    return vec / len(sent.text)
 
 
 def get_word_to_ind(words_list):
@@ -152,7 +162,8 @@ def get_word_to_ind(words_list):
     :return: the dictionary mapping words to the index
     """
     maps = {}
-    for i,w in enumerate(words_list) : maps[w] = i
+    for i, w in enumerate(words_list):
+        maps[w] = i
     return maps
 
 
@@ -170,8 +181,9 @@ def sentence_to_embedding(sent, word_to_vec, seq_len, embedding_dim=300):
     for i in range(len(sent.text)):
         if i == seq_len: break
         word = sent.text[i]
-        if word in word_to_vec: vecs.append(word_to_vec.get(word,np.zeros(embedding_dim)))
-    for j in range(len(vecs)-seq_len):vecs.append(np.zeros(embedding_dim))
+        if word in word_to_vec: vecs.append(
+            word_to_vec.get(word, np.zeros(embedding_dim)))
+    for j in range(len(vecs) - seq_len): vecs.append(np.zeros(embedding_dim))
     return np.array(vecs)
 
 
@@ -200,13 +212,14 @@ class OnlineDataset(Dataset):
         return sent_emb, sent_label
 
 
-class DataManager():
+class DataManager:
     """
     Utility class for handling all data management task. Can be used to get iterators for training and
     evaluation.
     """
 
-    def __init__(self, data_type=ONEHOT_AVERAGE, use_sub_phrases=True, dataset_path="stanfordSentimentTreebank", batch_size=50,
+    def __init__(self, data_type=ONEHOT_AVERAGE, use_sub_phrases=True,
+                 dataset_path="stanfordSentimentTreebank", batch_size=50,
                  embedding_dim=None):
         """
         builds the data manager used for training and evaluation.
@@ -218,11 +231,13 @@ class DataManager():
         """
 
         # load the dataset
-        self.sentiment_dataset = data_loader.SentimentTreeBank(dataset_path, split_words=True)
+        self.sentiment_dataset = data_loader.SentimentTreeBank(dataset_path,
+                                                               split_words=True)
         # map data splits to sentences lists
         self.sentences = {}
         if use_sub_phrases:
-            self.sentences[TRAIN] = self.sentiment_dataset.get_train_set_phrases()
+            self.sentences[
+                TRAIN] = self.sentiment_dataset.get_train_set_phrases()
         else:
             self.sentences[TRAIN] = self.sentiment_dataset.get_train_set()
 
@@ -233,27 +248,32 @@ class DataManager():
         words_list = list(self.sentiment_dataset.get_word_counts().keys())
         if data_type == ONEHOT_AVERAGE:
             self.sent_func = average_one_hots
-            self.sent_func_kwargs = {"word_to_ind": get_word_to_ind(words_list)}
+            self.sent_func_kwargs = {
+                "word_to_ind": get_word_to_ind(words_list)}
         elif data_type == W2V_SEQUENCE:
             self.sent_func = sentence_to_embedding
 
             self.sent_func_kwargs = {"seq_len": SEQ_LEN,
-                                     "word_to_vec": create_or_load_slim_w2v(words_list),
+                                     "word_to_vec": create_or_load_slim_w2v(
+                                         words_list),
                                      "embedding_dim": embedding_dim
                                      }
         elif data_type == W2V_AVERAGE:
             self.sent_func = get_w2v_average
             words_list = list(self.sentiment_dataset.get_word_counts().keys())
-            self.sent_func_kwargs = {"word_to_vec": create_or_load_slim_w2v(words_list),
-                                     "embedding_dim": embedding_dim
-                                     }
+            self.sent_func_kwargs = {
+                "word_to_vec": create_or_load_slim_w2v(words_list),
+                "embedding_dim": embedding_dim
+            }
         else:
             raise ValueError("invalid data_type: {}".format(data_type))
         # map data splits to torch datasets and iterators
-        self.torch_datasets = {k: OnlineDataset(sentences, self.sent_func, self.sent_func_kwargs) for
-                               k, sentences in self.sentences.items()}
-        self.torch_iterators = {k: DataLoader(dataset, batch_size=batch_size, shuffle=k == TRAIN)
-                                for k, dataset in self.torch_datasets.items()}
+        self.torch_datasets = {
+            k: OnlineDataset(sentences, self.sent_func, self.sent_func_kwargs)
+            for
+            k, sentences in self.sentences.items()}
+        self.torch_iterators = {k: DataLoader(dataset, batch_size=batch_size, shuffle=k == TRAIN) for
+                                k, dataset in self.torch_datasets.items()}
 
     def get_torch_iterator(self, data_subset=TRAIN):
         """
@@ -268,7 +288,8 @@ class DataManager():
         :return: numpy array with the labels of the requested part of the datset in the same order of the
         examples.
         """
-        return np.array([sent.sentiment_class for sent in self.sentences[data_subset]])
+        return np.array(
+            [sent.sentiment_class for sent in self.sentences[data_subset]])
 
     def get_input_shape(self):
         """
@@ -277,25 +298,25 @@ class DataManager():
         return self.torch_datasets[TRAIN][0][0].shape
 
 
-
-
 # ------------------------------------ Models ----------------------------------------------------
 
 class LSTM(nn.Module):
     """
     An LSTM for sentiment analysis with architecture as described in the exercise description.
     """
+
     def __init__(self, embedding_dim, hidden_dim, n_layers, dropout):
         super(LSTM, self).__init__()
-        self.lstm = torch.nn.LSTM(embedding_dim,hidden_dim,n_layers,
-                                  bidirectional=True,batch_first=True,
+        self.lstm = torch.nn.LSTM(embedding_dim, hidden_dim, n_layers,
+                                  bidirectional=True, batch_first=True,
                                   dropout=dropout)
 
-        self.linear = torch.nn.Linear(hidden_dim*2,1)
+        self.linear = torch.nn.Linear(hidden_dim * 2, 1)
         self.sig = torch.nn.Sigmoid()
+
     def forward(self, text):
-        out_lstm,zz = self.lstm(text)
-        o = out_lstm[:,-1,:]
+        out_lstm, zz = self.lstm(text)
+        o = out_lstm[:, -1, :]
         return self.linear(o)
 
     def predict(self, text):
@@ -306,18 +327,19 @@ class LogLinear(nn.Module):
     """
     general class for the log-linear models for sentiment analysis.
     """
+
     def __init__(self, embedding_dim):
         super().__init__()
-        self.linear = torch.nn.Linear(embedding_dim,1)
-        self.sigm = torch.nn.Sigmoid()
-
+        self.linear = torch.nn.Linear(embedding_dim, 1)
+        self.sig = torch.nn.Sigmoid()
 
     def forward(self, x):
         return self.linear(x)
 
     def predict(self, x):
         out = self.linear(x)
-        return self.sigm(out)
+        return self.sig(out)
+
 
 # ------------------------- training functions -------------
 
@@ -405,15 +427,17 @@ def get_predictions_for_data(model, data_iter):
     """
     cor_count = 0
     batch_size = data_iter.batch_size
-    iter_to_epoch = int(len(data_iter.dataset) // batch_size )
+    iter_to_epoch = int(len(data_iter.dataset) // batch_size)
 
     for j in range(iter_to_epoch):
-        for i,(X,y) in enumerate(data_iter[j*batch_size:(j+1)*batch_size]):
-            lbls = y.reshape(data_iter.batch_size,1).astype(torch.FloatTensor)
+        for i, (X, y) in enumerate(
+                data_iter[j * batch_size:(j + 1) * batch_size]):
+            lbls = y.reshape(data_iter.batch_size, 1).astype(torch.FloatTensor)
             pred = model.predict(X.astype(torch.FloatTensor))
-            cor_count += int(binary_accuracy(pred,lbls)*len(lbls))
+            cor_count += int(binary_accuracy(pred, lbls) * len(lbls))
 
     return 100 * cor_count / int(len(data_iter.dataset))
+
 
 def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
     """
@@ -425,14 +449,58 @@ def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
     :param lr: learning rate to be used for optimization
     :param weight_decay: parameter for l2 regularization
     """
-    return
+
+    criterion = nn.BCEWithLogitsLoss()
+    train_iter = data_manager.get_torch_iterator(TRAIN)
+    validation_iter = data_manager.get_torch_iterator(VAL)
+
+    optimizer = optim.Adam(model.parameters(), lr, weight_decay=weight_decay)
+    train_loss = []
+    train_accuracy = []
+    validation_loss = []
+    validation_accuracy = []
+
+    for e in range(n_epochs):
+        print(f"training epoch {e}/{n_epochs}:")
+        loss, accuracy = train_epoch(model, train_iter, optimizer, criterion)
+        train_loss.append(loss)
+        train_accuracy.append(accuracy)
+
+        loss, accuracy = evaluate(model, validation_iter, criterion)
+        validation_loss.append(loss)
+        validation_accuracy.append(accuracy)
+
+    return {"loss": [train_loss, validation_loss], "accuracy": [train_accuracy, validation_accuracy]}
+
+
+def test_and_show_results(train_results, data_manager, n_epochs, model_name):
+    epochs_vals = range(n_epochs)
+    for data_type, values in train_results.items():
+        plt.plot(epochs_vals, values[0], label="train loss")
+        plt.plot(epochs_vals, values[1], label="validation loss")
+        plt.title(f'{model_name} - {data_type} over training/validation')
+        plt.xlabel('Epochs')
+        plt.ylabel(data_type)
+        plt.legend()
+        plt.show()
+        plt.savefig(f"output_files/{model_name}_{data_type}")
+
+    test_iter = data_manager.get_torch_iterator(TEST)
+
 
 
 def train_log_linear_with_one_hot():
     """
     Here comes your code for training and evaluation of the log linear model with one hot representation.
     """
-    return
+    data_manager = DataManager(ONEHOT_AVERAGE, batch_size=BATCH_SIZE)
+    embedding_dim = data_manager.get_input_shape()[0]
+    model = LogLinear(embedding_dim)
+    train_results = train_model(model, data_manager, n_epochs=20, lr=0.01,
+                                weight_decay=0.0001)
+    save_pickle(train_results, "pickle_files/one_hot")
+    test_and_show_results(train_results, data_manager, 20, "LogLinearOneHot")
+
 
 
 def train_log_linear_with_w2v():
@@ -440,14 +508,26 @@ def train_log_linear_with_w2v():
     Here comes your code for training and evaluation of the log linear model with word embeddings
     representation.
     """
-    return
+    data_manager = DataManager(W2V_AVERAGE, batch_size=BATCH_SIZE, embedding_dim=W2V_EMBEDDING_DIM)
+    embedding_dim = data_manager.get_input_shape()[0]
+    model = LogLinear(embedding_dim)
+    train_results = train_model(model, data_manager, n_epochs=20, lr=0.01,
+                                weight_decay=0.0001)
+
+    test_and_show_results(train_results, data_manager, 20,
+                          "LogLinearWord2Vec")
 
 
 def train_lstm_with_w2v():
     """
     Here comes your code for training and evaluation of the LSTM model.
     """
-    return
+    data_manager = DataManager(W2V_SEQUENCE, batch_size=BATCH_SIZE, embedding_dim=W2V_EMBEDDING_DIM)
+    model = LSTM(embedding_dim=W2V_EMBEDDING_DIM, hidden_dim=100, n_layers=1, dropout=.5)
+    train_results = train_model(model, data_manager, n_epochs=4, lr=0.001,
+                                weight_decay=0.0001)
+    test_and_show_results(train_results, data_manager, 4,
+                          "LSTMWord2Vec")
 
 
 if __name__ == '__main__':
