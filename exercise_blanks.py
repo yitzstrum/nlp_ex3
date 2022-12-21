@@ -1,3 +1,5 @@
+from itertools import islice
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -352,10 +354,7 @@ def binary_accuracy(preds, y):
     :param y: a vector of true labels
     :return: scalar value - (<number of accurate predictions> / <number of examples>)
     """
-    accurate_predictions = 0
-    for i in range(len(preds)):
-        if preds[i] == y[i]:
-            accurate_predictions += 1
+    accurate_predictions = int(torch.sum(y==torch.round(preds)))
     return accurate_predictions / len(preds)
 
 
@@ -385,9 +384,9 @@ def train_epoch(model, data_iterator, optimizer, criterion):
     data_set_size = len(data_iterator)
     accuracy = total_accuracy / data_set_size
     loss = total_loss / data_set_size
-    return accuracy, loss
+    return  loss, accuracy
 
-
+@torch.no_grad()
 def evaluate(model, data_iterator, criterion):
     """
     evaluate the model performance on the given data
@@ -406,15 +405,14 @@ def evaluate(model, data_iterator, criterion):
             0)
         curr_loss = criterion(pred, local_y)
         total_loss += curr_loss
-        curr_loss.backward()
+        #curr_loss.backward()
         total_accuracy += binary_accuracy(torch.round(nn.Sigmoid()(pred)), y)
     data_set_size = len(data_iterator)
     accuracy = total_accuracy / data_set_size
     loss = total_loss / data_set_size
+    return loss,accuracy
 
-    return accuracy, loss
-
-
+@torch.no_grad()
 def get_predictions_for_data(model, data_iter):
     """
 
@@ -432,17 +430,15 @@ def get_predictions_for_data(model, data_iter):
     iter_to_epoch = int(len(data_iter.dataset) // batch_size)
     y_hat, y_pred = [], []
 
-    for j in range(iter_to_epoch):
-        for i, (X, y) in enumerate(
-                data_iter[j * batch_size:(j + 1) * batch_size]):
-            lbls = y.reshape(data_iter.batch_size, 1).astype(torch.FloatTensor)
-            pred = model.predict(X.astype(torch.FloatTensor))
+    for i, (X, y) in islice(enumerate(data_iter), iter_to_epoch):
+            lbls = y.reshape(data_iter.batch_size, 1).type(torch.FloatTensor)
+            pred = model.predict(X.type(torch.FloatTensor))
             cor_count += int(binary_accuracy(pred, lbls) * len(lbls))
             loss += loss_func(pred,lbls)
             y_hat+=lbls
             y_pred += pred
 
-    return y_hat, y_pred, 100 * cor_count / int(len(data_iter.dataset)),loss
+    return torch.cat(y_hat), torch.cat(y_pred),  cor_count / int(len(data_iter.dataset)),loss / iter_to_epoch
 
 
 def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
@@ -482,9 +478,9 @@ def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
 def test_and_show_results(train_results,test_results, data_manager, n_epochs, model_name):
     epochs_vals = range(n_epochs)
     for data_type, values in train_results.items():
-        plt.plot(epochs_vals, values[0], label="train loss")
-        plt.plot(epochs_vals, values[1], label="validation loss")
-        plt.title(f'{model_name} - {data_type} over training/validation')
+        plt.plot(epochs_vals, values[0], label="train")
+        plt.plot(epochs_vals, values[1], label="validation")
+        plt.title(f'{model_name} - {data_type} over training&validation')
         plt.xlabel('Epochs')
         plt.ylabel(data_type)
         plt.legend()
@@ -517,7 +513,7 @@ def train_log_linear_with_one_hot():
     model = LogLinear(embedding_dim)
     train_results = train_model(model, data_manager, n_epochs=20, lr=0.01,
                                 weight_decay=0.0001)
-    save_pickle(train_results, "pickle_files/one_hot")
+    # save_pickle(train_results, "pickle_files/one_hot")
     test_iter,criter = data_manager.get_torch_iterator(TEST), nn.BCEWithLogitsLoss()
     test_results = get_predictions_for_data(model,test_iter)
     test_and_show_results(train_results,test_results, data_manager, 20, "LogLinearOneHot")
@@ -555,6 +551,6 @@ def train_lstm_with_w2v():
 
 
 if __name__ == '__main__':
-    train_log_linear_with_one_hot()
-    # train_log_linear_with_w2v()
-    # train_lstm_with_w2v()
+    # train_log_linear_with_one_hot()
+    #  train_log_linear_with_w2v()
+    train_lstm_with_w2v()
