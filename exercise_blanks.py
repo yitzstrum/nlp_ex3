@@ -425,9 +425,12 @@ def get_predictions_for_data(model, data_iter):
     :param data_iter: torch iterator as given by the DataManager
     :return:
     """
+    loss_func = nn.BCEWithLogitsLoss()
     cor_count = 0
+    loss = 0
     batch_size = data_iter.batch_size
     iter_to_epoch = int(len(data_iter.dataset) // batch_size)
+    y_hat, y_pred = [], []
 
     for j in range(iter_to_epoch):
         for i, (X, y) in enumerate(
@@ -435,8 +438,11 @@ def get_predictions_for_data(model, data_iter):
             lbls = y.reshape(data_iter.batch_size, 1).astype(torch.FloatTensor)
             pred = model.predict(X.astype(torch.FloatTensor))
             cor_count += int(binary_accuracy(pred, lbls) * len(lbls))
+            loss += loss_func(pred,lbls)
+            y_hat+=lbls
+            y_pred += pred
 
-    return 100 * cor_count / int(len(data_iter.dataset))
+    return y_hat, y_pred, 100 * cor_count / int(len(data_iter.dataset)),loss
 
 
 def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
@@ -473,7 +479,7 @@ def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
     return {"loss": [train_loss, validation_loss], "accuracy": [train_accuracy, validation_accuracy]}
 
 
-def test_and_show_results(train_results, data_manager, n_epochs, model_name):
+def test_and_show_results(train_results,test_results, data_manager, n_epochs, model_name):
     epochs_vals = range(n_epochs)
     for data_type, values in train_results.items():
         plt.plot(epochs_vals, values[0], label="train loss")
@@ -485,7 +491,20 @@ def test_and_show_results(train_results, data_manager, n_epochs, model_name):
         plt.show()
         plt.savefig(f"output_files/{model_name}_{data_type}")
 
-    test_iter = data_manager.get_torch_iterator(TEST)
+    [y_hat, y_pred, acc, loss] = test_results
+    print(f"Test Results - acc:{acc}, loss:{loss}")
+
+    rare_indx = data_loader.get_rare_words_examples(data_manager.sentences["test"], data_manager.sentiment_dataset)
+    rare_acc = binary_accuracy(y_pred[rare_indx], y_hat[rare_indx])
+    print(f"Test Rare words Results - acc:{rare_acc}")
+
+    neg_polar_indx = data_loader.get_negated_polarity_examples(data_manager.sentences["test"])
+    neg_polar_acc = binary_accuracy(y_pred[neg_polar_indx],y_hat[neg_polar_indx])
+    print(f"Test Negated Polarity Results - acc:{neg_polar_acc}")
+
+
+
+
 
 
 
@@ -499,7 +518,9 @@ def train_log_linear_with_one_hot():
     train_results = train_model(model, data_manager, n_epochs=20, lr=0.01,
                                 weight_decay=0.0001)
     save_pickle(train_results, "pickle_files/one_hot")
-    test_and_show_results(train_results, data_manager, 20, "LogLinearOneHot")
+    test_iter,criter = data_manager.get_torch_iterator(TEST), nn.BCEWithLogitsLoss()
+    test_results = get_predictions_for_data(model,test_iter)
+    test_and_show_results(train_results,test_results, data_manager, 20, "LogLinearOneHot")
 
 
 
@@ -513,8 +534,9 @@ def train_log_linear_with_w2v():
     model = LogLinear(embedding_dim)
     train_results = train_model(model, data_manager, n_epochs=20, lr=0.01,
                                 weight_decay=0.0001)
-
-    test_and_show_results(train_results, data_manager, 20,
+    test_iter,criter = data_manager.get_torch_iterator(TEST), nn.BCEWithLogitsLoss()
+    test_results = get_predictions_for_data(model,test_iter)
+    test_and_show_results(train_results,test_results, data_manager, 20,
                           "LogLinearWord2Vec")
 
 
@@ -526,7 +548,9 @@ def train_lstm_with_w2v():
     model = LSTM(embedding_dim=W2V_EMBEDDING_DIM, hidden_dim=100, n_layers=1, dropout=.5)
     train_results = train_model(model, data_manager, n_epochs=4, lr=0.001,
                                 weight_decay=0.0001)
-    test_and_show_results(train_results, data_manager, 4,
+    test_iter,criter = data_manager.get_torch_iterator(TEST), nn.BCEWithLogitsLoss()
+    test_results = get_predictions_for_data(model,test_iter)
+    test_and_show_results(train_results,test_results, data_manager, 4,
                           "LSTMWord2Vec")
 
 
